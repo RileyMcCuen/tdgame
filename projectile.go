@@ -9,15 +9,16 @@ import (
 type (
 	Projectile interface {
 		Particle
+		Destination() Location
 	}
 	Bullet struct {
 		Asset
 		*LocationWrapper
-		Animator
-		explode func(l Location)
-		e       Enemy
-		el      *list.Element
-		active  bool
+		anim   *PrecalculatedAnimator
+		e      Enemy
+		el     *list.Element
+		active bool
+		effect *SpriteEffect
 	}
 	ProjectileList struct {
 		*list.List
@@ -29,7 +30,9 @@ func NewProjectileList() *ProjectileList {
 }
 
 func (pl *ProjectileList) Push(p Projectile) {
-	p.SetElem(pl.List.PushFront(p))
+	if p != nil {
+		p.SetElem(pl.List.PushFront(p))
+	}
 }
 
 func (pl *ProjectileList) Peek() Projectile {
@@ -52,7 +55,7 @@ func (pl *ProjectileList) For(f func(idx int, p Projectile) bool) {
 	}
 }
 
-func NewProjectile(start Location, a Asset, e Enemy, explode func(l Location)) Projectile {
+func NewProjectile(start Location, a Asset, e Enemy, effectSprite *Sprite) Projectile {
 	speed := 2
 	max := 96
 	// if enemy is within range
@@ -66,11 +69,11 @@ func NewProjectile(start Location, a Asset, e Enemy, explode func(l Location)) P
 			return &Bullet{
 				a,
 				&LocationWrapper{start},
-				AnimatorFromLine(start.Point, e.LocationAt(i).Point, i),
-				explode,
+				AnimatorFromLine(start.Point, e.LocationAt(i).Point, i).(*PrecalculatedAnimator),
 				e,
 				nil,
 				true,
+				NewSpriteEffect(e.LocationAt(i), effectSprite),
 			}
 		}
 	}
@@ -78,9 +81,10 @@ func NewProjectile(start Location, a Asset, e Enemy, explode func(l Location)) P
 	return nil
 }
 
-func (b *Bullet) Process(tick int) {
+func (b *Bullet) Process(ticks int) {
 	if !b.Done() {
-		b.Animate(b)
+		b.Asset.Process(ticks)
+		b.anim.Animate(b)
 	}
 }
 
@@ -90,11 +94,12 @@ func (b *Bullet) Active() bool {
 
 func (b *Bullet) Init() {
 	b.active = true
+	b.effect.Reset()
 }
 
 func (b *Bullet) Reset() {
 	b.active = false
-	b.Animator.Reset()
+	b.anim.Reset()
 	b.Asset.Reset()
 	b.LocationWrapper.SetLocation(Loc(Pt(-100, -100), 0)) // put off screen for the moment
 	b.e = nil
@@ -118,13 +123,18 @@ func (b *Bullet) SetElem(e *list.Element) {
 }
 
 func (b *Bullet) Done() bool {
-	return b.Animator.Done()
+	return b.anim.Done()
 }
 
-func (b *Bullet) Finalize() {
+func (b *Bullet) Finalize() Effect {
 	if b.e.Active() {
 		// TODO: variable damage
 		b.e.Damage(3)
 	}
-	b.explode(Loc(b.l.Add(Pt(24, 24)), 0))
+	b.effect.SetLocation(Loc(b.l.Add(Pt(24, 24)), 0))
+	return b.effect
+}
+
+func (b *Bullet) Destination() Location {
+	return b.anim.Location(len(b.anim.locs) - 1)
 }

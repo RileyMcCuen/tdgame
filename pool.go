@@ -1,10 +1,7 @@
 package main
 
-import (
-	"container/list"
-)
-
 type (
+	List     []PoolItem
 	PoolItem interface {
 		Active() bool
 		Init()
@@ -16,35 +13,70 @@ type (
 		Return(i PoolItem)
 	}
 	BasicPool struct {
-		size int
-		c    Creator
-		l    *list.List
+		c Creator
+		l *List
 	}
 )
 
-func NewPool(size int, c Creator) *BasicPool {
-	p := &BasicPool{size, c, list.New()}
+func NewList(size int, f func() PoolItem) *List {
+	items := make(List, size)
 	for i := 0; i < size; i++ {
-		p.l.PushBack(c())
+		items[i] = f()
 	}
+	return &items
+}
+
+func (l *List) Len() int {
+	return len(*l)
+}
+
+func (l *List) Empty() bool {
+	return len(*l) == 0
+}
+
+func (l *List) Item() PoolItem {
+	idx := len(*l) - 1
+	ret := (*l)[idx]
+	*l = (*l)[0:idx]
+	return ret
+}
+
+func (l *List) Return(i PoolItem) {
+	*l = append(*l, i)
+}
+
+func (l *List) Double(f func() PoolItem) {
+	listCap, listLen := cap(*l), len(*l)
+	newList := make(List, listCap*2)
+	copy(newList, *l)
+	for i := 0; i < listCap; i++ {
+		newList[listLen+i] = f()
+	}
+	*l = newList
+}
+
+func (l *List) Shrink() {
+	newList := make(List, len(*l))
+	copy(newList, *l)
+	*l = newList
+}
+
+func NewPool(size int, c Creator) *BasicPool {
+	p := &BasicPool{c, NewList(size, c)}
 	return p
 }
 
 func (p *BasicPool) Item() PoolItem {
-	if p.l.Len() == 0 {
-		p.size++
-		c := p.c()
-		c.Init()
-		// fmt.Printf("%p\n", c)
-		return c
+	if p.l.Empty() {
+		p.l.Double(p.c)
 	}
-	ret := p.l.Remove(p.l.Front()).(PoolItem)
+	item := p.l.Item()
+	ret := item.(PoolItem)
 	ret.Init()
-	// fmt.Printf("%p\n", ret)
 	return ret
 }
 
 func (p *BasicPool) Return(i PoolItem) {
 	i.Reset()
-	p.l.PushBack(i)
+	p.l.Return(i)
 }

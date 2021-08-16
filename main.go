@@ -18,6 +18,8 @@ type (
 		Particles   *ParticleList
 		Projectiles *ProjectileList
 		Effects     *EffectList
+		Towers      []Tower
+		Spawner     Spawner
 		*UI
 		t *Ticker
 	}
@@ -58,7 +60,7 @@ func Square(a int) int {
 }
 
 func (g *Game) Return(p Particle) {
-	p.Finalize()
+	g.Effects.Push(p.Finalize())
 	g.ParticlePool.Return(g.Particles.Remove(p.Elem()))
 }
 
@@ -72,11 +74,16 @@ func (g *Game) PostUpdate() error {
 
 func (g *Game) Update() error {
 	ticks := g.t.Ticks()
-	// fmt.Println(ticks, g.Particles.List.Len())
+	for _, t := range g.Towers {
+		t.Process(ticks)
+		if proj := t.Spawn(g.Particles); proj != nil {
+			g.Projectiles.Push(proj.(Projectile))
+		}
+	}
 	g.Projectiles.For(func(_ int, p Projectile) bool {
 		p.Process(ticks)
 		if p.Done() {
-			g.Projectiles.Remove(p.Elem()).Finalize()
+			g.Effects.Push(g.Projectiles.Remove(p.Elem()).Finalize())
 		}
 		return false
 	})
@@ -85,39 +92,39 @@ func (g *Game) Update() error {
 		if p.(Enemy).Destroyed() {
 			g.UI.AddScore(1)
 			// enemy was destroyed, delete and give points to player
-			g.Return(p)
+			g.Effects.Push(p.Finalize())
+			g.ParticlePool.Return(g.Particles.Remove(p.Elem()))
 		}
 		if p.Done() {
 			g.UI.AddHealth(-1)
 			// enemy made it to the end of the path, delete and do damage to player
-			g.Return(p)
+			g.Effects.Push(p.Finalize())
+			g.ParticlePool.Return(g.Particles.Remove(p.Elem()))
 		}
 		return false
 	})
 	g.Effects.For(func(_ int, p Effect) bool {
 		p.Process(ticks)
 		if p.Done() {
-			g.Effects.Remove(p.Elem()).Finalize()
+			g.Effects.Remove(p.Elem())
 		}
 		return false
 	})
 	// spawner creating enemies
-	if ticks%64 == 0 {
+	if ticks%128 == 0 {
 		g.Particles.Push(g.ParticlePool.Item())
 	}
 	// tower shooting projectiles
-	if ticks%32 == 0 {
-		g.Particles.For(func(_ int, p Particle) bool {
-			np := NewProjectile(Loc(Pt(128, 0), 0), g.Asset("bullet"), p.(Enemy), func(l Location) {
-				g.Effects.Push(NewSpriteEffect(l, g.Sprite("explosion")))
-			})
-			if np != nil {
-				g.Projectiles.Push(np)
-				return true
-			}
-			return false
-		})
-	}
+	// if ticks%16 == 0 {
+	// 	g.Particles.For(func(_ int, p Particle) bool {
+	// 		np := NewProjectile(Loc(Pt(128, 0), 0), g.Asset("bullet"), p.(Enemy), g.Sprite("explosion"))
+	// 		if np != nil {
+	// 			g.Projectiles.Push(np)
+	// 			return true
+	// 		}
+	// 		return false
+	// 	})
+	// }
 	return g.PostUpdate()
 }
 
@@ -135,6 +142,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		p.Draw(con)
 		return false
 	})
+	for _, t := range g.Towers {
+		t.Draw(con)
+	}
 	g.Effects.For(func(_ int, p Effect) bool {
 		p.Draw(con)
 		return false
@@ -156,15 +166,48 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func main() {
+	ebiten.SetMaxTPS(MaxTPS)
 	aa := MakeAssetAtlas("./assets")
+	graph := GraphFromFile("./maps/8x8.txt", aa)
 	g := &Game{
-		GraphFromFile("./maps/8x8.txt", aa),
+		graph,
 		aa,
 		DefaultAnimatorAtlas,
 		nil, // neet to reference g in order to create the pool
 		NewParticleList(),
 		NewProjectileList(),
 		NewEffectList(),
+		[]Tower{
+			NewTower("cannon", Loc(Pt(128, 0), 0), aa),
+		},
+		NewGameSpawner(5, 128, []Enemy{NewEnemy(
+			aa.Asset("enemy"),
+			DefaultAnimatorAtlas.PrecalculatedAnimator("prepath"),
+			10,
+			Loc(Pt(graph.start.x*TileSizeInt, (graph.start.y-1)*TileSizeInt), graph.InitialRotation()),
+			aa.Sprite("enemydeath"),
+		).(Enemy),
+			NewEnemy(
+				aa.Asset("enemy"),
+				DefaultAnimatorAtlas.PrecalculatedAnimator("prepath"),
+				10,
+				Loc(Pt(graph.start.x*TileSizeInt, (graph.start.y-1)*TileSizeInt), graph.InitialRotation()),
+				aa.Sprite("enemydeath"),
+			).(Enemy),
+			NewEnemy(
+				aa.Asset("enemy"),
+				DefaultAnimatorAtlas.PrecalculatedAnimator("prepath"),
+				10,
+				Loc(Pt(graph.start.x*TileSizeInt, (graph.start.y-1)*TileSizeInt), graph.InitialRotation()),
+				aa.Sprite("enemydeath"),
+			).(Enemy),
+			NewEnemy(
+				aa.Asset("enemy"),
+				DefaultAnimatorAtlas.PrecalculatedAnimator("prepath"),
+				10,
+				Loc(Pt(graph.start.x*TileSizeInt, (graph.start.y-1)*TileSizeInt), graph.InitialRotation()),
+				aa.Sprite("enemydeath"),
+			).(Enemy)}),
 		NewUI(),
 		NewTicker(-1), // nearly infinite ticker, ticks until int overflow happens
 	}
@@ -177,12 +220,9 @@ func main() {
 			g.PrecalculatedAnimator("prepath"),
 			10,
 			loc,
-			func(l Location) {
-				g.Effects.Push(NewSpriteEffect(l, g.Sprite("enemydeath")))
-			},
+			g.Sprite("enemydeath"),
 		)
 	})
-	ebiten.SetMaxTPS(MaxTPS)
 	ebiten.SetWindowTitle("Tower Defense")
 	// f, err := os.Create("poolprofile")
 	// Check(err)

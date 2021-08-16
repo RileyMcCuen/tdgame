@@ -12,21 +12,21 @@ type (
 		ListItem
 		PoolItem
 		Locator
-		Draw(*gg.Context)
+		Drawer
 	}
 	EffectList struct {
 		*list.List
 	}
 	SpriteEffect struct {
-		l    Location
-		s    *Sprite
-		el   *list.Element
-		done bool
+		l             Location
+		s             *Sprite
+		el            *list.Element
+		started, done bool
 	}
 )
 
 func NewSpriteEffect(l Location, s *Sprite) *SpriteEffect {
-	return &SpriteEffect{l, s, nil, false}
+	return &SpriteEffect{l, s, nil, false, false}
 }
 
 func (s *SpriteEffect) Location() Location {
@@ -38,11 +38,12 @@ func (s *SpriteEffect) SetLocation(l Location) {
 }
 
 func (s *SpriteEffect) Process(ticks int) {
-	s.s.IncrementFrame()
-	s.done = s.s.cur == 0
+	s.s.Process(ticks)
+	s.done = s.started && s.s.cur == 0 && s.s.t.cur == 0
 }
 
 func (s *SpriteEffect) Draw(con *gg.Context) {
+	s.started = true
 	s.s.Draw(con, s.l)
 }
 
@@ -50,13 +51,12 @@ func (s *SpriteEffect) Done() bool {
 	return s.done
 }
 
-func (s *SpriteEffect) Finalize() {}
-
 func (s *SpriteEffect) Active() bool {
 	return !s.done
 }
 
 func (s *SpriteEffect) Init() {
+	s.started = false
 	s.done = false
 }
 
@@ -77,7 +77,9 @@ func NewEffectList() *EffectList {
 }
 
 func (pl *EffectList) Push(p Effect) {
-	p.SetElem(pl.List.PushFront(p))
+	if p != nil {
+		p.SetElem(pl.List.PushFront(p))
+	}
 }
 
 func (pl *EffectList) Peek() Effect {

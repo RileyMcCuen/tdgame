@@ -27,8 +27,8 @@ type (
 		Direction
 		*Node
 	}
-	List             []*Node
-	Graph            []List
+	Nodes            []*Node
+	Graph            []Nodes
 	CachedImageGraph struct {
 		image *ebiten.Image
 		start Point
@@ -226,7 +226,7 @@ func NewGraph(width, height int) Graph {
 	}
 	ret := make(Graph, height)
 	for i := range ret {
-		row := make(List, width)
+		row := make(Nodes, width)
 		for j := range row {
 			row[j] = BlankNode(Pt(j, i))
 		}

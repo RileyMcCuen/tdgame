@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"image"
 	_ "image/png"
 	"math"
@@ -18,12 +17,13 @@ import (
 
 type (
 	Drawer interface {
-		DrawImage(img image.Image, x, y int)
+		Draw(con *gg.Context)
 	}
 	SubImager interface {
 		SubImage(r image.Rectangle) image.Image
 	}
 	Asset interface {
+		Processor
 		Draw(con *gg.Context, l Location)
 		Copy() Asset
 		Reset()
@@ -64,9 +64,11 @@ func (a *StaticAsset) Copy() Asset {
 	return &StaticAsset{a.Image}
 }
 
-func (a *StaticAsset) Reset() {
-	// NOOP: StaticAsset never changes, it is static
-}
+func (s *StaticAsset) Process(ticks int) {}
+
+func (s *StaticAsset) Done() bool { return false }
+
+func (a *StaticAsset) Reset() {}
 
 func (c *CenteredAsset) Draw(con *gg.Context, l Location) {
 	x, y := l.x+c.p.x, l.y+c.p.y
@@ -78,6 +80,17 @@ func (c *CenteredAsset) Draw(con *gg.Context, l Location) {
 
 func (c *CenteredAsset) Copy() Asset {
 	return &CenteredAsset{c.StaticAsset, c.p}
+}
+
+func (s *Sprite) Process(ticks int) {
+	if s.t.Tick() {
+		s.IncrementFrame()
+		s.t.Reset()
+	}
+}
+
+func (s *Sprite) Done() bool {
+	return false
 }
 
 func (s *Sprite) Copy() Asset {
@@ -97,9 +110,10 @@ func (s *Sprite) CurrentFrame() image.Image {
 }
 
 func (s *Sprite) IncrementFrame() {
-	s.cur++
-	if s.cur >= s.total {
+	if s.cur == s.total-1 {
 		s.cur = 0
+	} else {
+		s.cur++
 	}
 }
 
@@ -113,10 +127,7 @@ func (s *Sprite) Draw(con *gg.Context, l Location) {
 	con.RotateAbout(gg.Radians(float64(l.rot)), float64(l.x+32), float64(l.y+32))
 	img := s.CurrentFrame()
 	con.DrawImage(img, l.x-img.Bounds().Min.X, l.y-img.Bounds().Min.Y)
-	if s.t.Tick() {
-		s.IncrementFrame()
-		s.t.Reset()
-	}
+	con.RotateAbout(-gg.Radians(float64(l.rot)), float64(l.x+32), float64(l.y+32))
 	con.Pop()
 }
 
@@ -172,7 +183,6 @@ func (aa AssetAtlas) HandleCenteredAsset(name string, img image.Image) {
 	matches := CenteredRegEx.FindStringSubmatch(name)
 	k := Kind(matches[1])
 	sz := img.Bounds().Size()
-	fmt.Println(sz)
 	x, y := (TileSizeInt-sz.X)/2, (TileSizeInt-sz.Y)/2
 	aa.assets[k] = &CenteredAsset{StaticAsset{img}, Pt(x, y)}
 }

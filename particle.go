@@ -10,7 +10,6 @@ type (
 	Processor interface {
 		Process(tick int)
 		Done() bool
-		Finalize()
 	}
 	Locator interface {
 		Location() Location
@@ -31,7 +30,8 @@ type (
 		Locator
 		PoolItem
 		ListItem
-		Draw(*gg.Context)
+		Drawer
+		Finalize() Effect
 	}
 	Enemy interface {
 		Damageable
@@ -49,7 +49,7 @@ type (
 		e         *list.Element
 		startL, l Location
 		active    bool
-		die       func(l Location)
+		effect    *SpriteEffect
 	}
 	ParticlePool struct {
 		*BasicPool
@@ -135,12 +135,16 @@ func (hb *HealthBar) Heal(amount int) {
 	hb.health = MinInt(hb.health, hb.max)
 }
 
-func NewEnemy(a Asset, anim *PrecalculatedAnimator, health int, l Location, die func(l Location)) Particle {
-	return &BasicEnemy{a, anim, NewHealthBar(health), nil, l, l, false, die}
+func NewEnemy(a Asset, anim *PrecalculatedAnimator, health int, l Location, effectSprite *Sprite) Particle {
+	return &BasicEnemy{a, anim, NewHealthBar(health), nil, l, l, false, NewSpriteEffect(l, effectSprite)}
 }
 
-func (e *BasicEnemy) Finalize() {
-	e.die(e.l)
+func (e *BasicEnemy) Finalize() Effect {
+	if e.Destroyed() {
+		e.effect.SetLocation(e.l)
+		return e.effect
+	}
+	return nil
 }
 
 func (e *BasicEnemy) Active() bool {
@@ -149,6 +153,7 @@ func (e *BasicEnemy) Active() bool {
 
 func (e *BasicEnemy) Init() {
 	e.active = true
+	e.effect.Reset()
 }
 
 func (e *BasicEnemy) Reset() {
@@ -160,7 +165,8 @@ func (e *BasicEnemy) Reset() {
 	e.l = e.startL
 }
 
-func (e *BasicEnemy) Process(tick int) {
+func (e *BasicEnemy) Process(ticks int) {
+	e.Asset.Process(ticks)
 	e.PrecalculatedAnimator.Animate(e)
 }
 
