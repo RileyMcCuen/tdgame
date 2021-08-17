@@ -1,0 +1,18 @@
+meta:
+  type: tower
+  variety: shooting
+  name: cannon
+attributes:
+  asset: cannon
+  range:
+    min: 32
+    max: 128
+  delay: 64
+  cost: 100
+  projectile:
+    asset: ball
+    effect: explosion
+    poolSize: 10
+    speed: 2
+    damage: 3
+    explosionRadius: 4
