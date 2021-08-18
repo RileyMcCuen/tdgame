@@ -79,6 +79,10 @@ func (b *Bullet) Spec() *ProjectileAttributes {
 	return b.ProjectileAttributes
 }
 
+func (b *Bullet) Speed() int {
+	return b.ProjectileAttributes.Speed
+}
+
 func (b *Bullet) Process(ticks int) {
 	if !b.Done() {
 		b.asset.Process(ticks)

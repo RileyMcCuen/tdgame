@@ -2,6 +2,7 @@ package graph
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"io/ioutil"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 	"tdgame/util"
 
 	"github.com/fogleman/gg"
-	"github.com/hajimehoshi/ebiten/v2"
 )
 
 type (
@@ -27,9 +27,10 @@ type (
 	Nodes            []*Node
 	Graph            []Nodes
 	CachedImageGraph struct {
-		image *ebiten.Image
-		start core.Point
-		path  []core.Kind
+		// imageWithGrid, image *ebiten.Image
+		imageWithGrid, image image.Image
+		start                core.Point
+		path                 []core.Kind
 		Graph
 	}
 )
@@ -143,10 +144,15 @@ func GraphFromPath(start core.Point, dirs []core.Direction, aa asset.AssetAtlas)
 			}
 		}
 	}
+	core.Grid = false
 	con := gg.NewContext(g.Size())
 	g.Draw(con)
-	eimg := ebiten.NewImageFromImage(con.Image())
-	return CachedImageGraph{eimg, start, kinds, g}
+	eimg := con.Image() // ebiten.NewImageFromImage(con.Image())
+	core.Grid = true
+	con = gg.NewContext(g.Size())
+	g.Draw(con)
+	eimgWithGrid := con.Image() // ebiten.NewImageFromImage(con.Image())
+	return CachedImageGraph{eimgWithGrid, eimg, start, kinds, g}
 }
 
 func (g Graph) Height() int {
@@ -222,8 +228,15 @@ func (g CachedImageGraph) Path() []core.Kind {
 	return g.path
 }
 
-func (g CachedImageGraph) Draw(screen *ebiten.Image) {
-	screen.DrawImage(g.image, &ebiten.DrawImageOptions{})
+// func (g CachedImageGraph) Draw(screen *ebiten.Image) {
+func (g CachedImageGraph) Draw(con *gg.Context) {
+	if core.Grid {
+		con.DrawImage(g.imageWithGrid, 0, 0)
+		// screen.DrawImage(g.imageWithGrid, &ebiten.DrawImageOptions{})
+	} else {
+		con.DrawImage(g.image, 0, 0)
+		// screen.DrawImage(g.imageWithGrid, &ebiten.DrawImageOptions{})
+	}
 }
 
 func (g CachedImageGraph) InitialRotation() int {

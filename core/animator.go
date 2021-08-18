@@ -8,6 +8,7 @@ type (
 	}
 	Animatable interface {
 		Locator
+		Speed() int
 	}
 	Animator interface {
 		Animate(a Animatable)
@@ -15,6 +16,9 @@ type (
 		Done() bool
 		Copy() Animator
 		Reset()
+	}
+	animatableLoc struct {
+		*LocationWrapper
 	}
 	// Performs animation for a single tile distance
 	TileAnimator struct {
@@ -37,6 +41,10 @@ type (
 const (
 	RotationTime = 30
 )
+
+func (animatableLoc) Speed() int {
+	return 1
+}
 
 func BlankAnimator(ticks int) Animator {
 	return NewTileAnimator(ticks, Blk, func(tick int, l Location) Location { return l })
@@ -140,7 +148,7 @@ func (sa *SerialAnimator) Copy() Animator {
 }
 
 func NewPrecalculatedAnimator(k Kind, start Location, a Animator) Animator {
-	l, locs := LocWrapper(start), make([]Location, 0)
+	l, locs := animatableLoc{LocWrapper(start)}, make([]Location, 0)
 	for !a.Done() {
 		a.Animate(l)
 		locs = append(locs, l.Location())
@@ -192,7 +200,7 @@ func (pa *PrecalculatedAnimator) Animate(a Animatable) {
 		return
 	}
 	a.SetLocation(pa.locs[pa.t.Ticks()])
-	pa.t.Tick()
+	pa.t.TickBy(a.Speed())
 }
 
 func (pa *PrecalculatedAnimator) Kind() Kind {

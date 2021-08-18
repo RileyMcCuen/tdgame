@@ -1,0 +1,11 @@
+meta:
+  type: enemy
+  variety: basic
+  name: spider
+attributes:
+  asset: spider
+  animation: prepath
+  effect: spiderdeath
+  health: 5
+  speed: 2
+  points: 1

@@ -34,15 +34,18 @@ type (
 )
 
 const (
-	MaxTPS = 32 * 512
+	// MaxTPS = 32 * 512
+	MaxTPS = 32
 )
 
 func (g *Game) HandleInput() {
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-		// fmt.Println("pressed", g.r)
 		if g.r == nil {
 			g.r = g.NewRound(g.UI.Round(), (g.UI.Round()+1)*10)
 		}
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyG) {
+		core.Grid = !core.Grid
 	}
 }
 
@@ -91,8 +94,9 @@ func (g *Game) Update() error {
 	// fmt.Println("projectiles")
 	g.Particles.For(func(_ int, p td.Particle) bool {
 		p.Process(ticks)
-		if p.(td.Enemy).Destroyed() {
-			g.UI.AddScore(1)
+		e := p.(td.Enemy)
+		if e.Destroyed() {
+			g.UI.AddScore(e.Spec().Points)
 			// enemy was destroyed, delete and give points to player
 			g.Effects.Push(p.Finalize())
 			g.Particles.Remove(p.Elem()).Reset()
@@ -123,7 +127,8 @@ func (g *Game) Update() error {
 func (g *Game) Draw(screen *ebiten.Image) {
 	con := gg.NewContext(screen.Size())
 	// draw the background before drawing everything else
-	g.CachedImageGraph.Draw(screen)
+	// g.CachedImageGraph.Draw(screen)
+	g.CachedImageGraph.Draw(con)
 	// draw all of the processables
 	g.Particles.ForReverse(func(_ int, p td.Particle) bool {
 		p.Draw(con)
@@ -159,12 +164,17 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 func (g *Game) NewRound(round, points int) *td.Round {
 	es := make([]td.Enemy, points)
 	for i := range es {
-		es[i] = g.Declarations.EnemyAtlas.Enemy(g.StartLoc(), "slug")
+		if i%2 == 0 {
+			es[i] = g.Declarations.EnemyAtlas.Enemy(g.StartLoc(), "slug")
+		} else {
+			es[i] = g.Declarations.EnemyAtlas.Enemy(g.StartLoc(), "spider")
+		}
 	}
 	return &td.Round{0, 96, round, points, core.NewTicker(0), es}
 }
 
 func configureEbiten() {
+	// ebiten.SetFullscreen(true)
 	ebiten.SetMaxTPS(MaxTPS)
 	ebiten.SetWindowTitle("Tower Defense")
 }
@@ -184,8 +194,8 @@ func NewGame(assets, declarations, gameMap string) *Game {
 		asset.NewEffectList(),
 		[]td.Tower{
 			decs.Tower(core.Loc(core.Pt(128, 0), 0), "cannon"),
-			decs.Tower(core.Loc(core.Pt(128, 64), 0), "cannon"),
-			decs.Tower(core.Loc(core.Pt(128, 128), 0), "cannon"),
+			decs.Tower(core.Loc(core.Pt(256, 128), 0), "cannon"),
+			decs.Tower(core.Loc(core.Pt(384, 256), 0), "cannon"),
 		},
 		decs,
 		nil,

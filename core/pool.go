@@ -71,7 +71,7 @@ func (p *BasicPool) Item() PoolItem {
 		p.l.Double(p.c)
 	}
 	item := p.l.Item()
-	ret := item.(PoolItem)
+	ret := item
 	ret.Init()
 	return ret
 }

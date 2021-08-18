@@ -188,6 +188,10 @@ func (e *BasicEnemy) Process(ticks int) {
 	e.anim.Animate(e)
 }
 
+func (e *BasicEnemy) Speed() int {
+	return e.EnemySpec.Speed
+}
+
 func (e *BasicEnemy) Draw(con *gg.Context) {
 	e.sprite.Draw(con, e.Location())
 }

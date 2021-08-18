@@ -1,5 +1,7 @@
 package core
 
+import "tdgame/util"
+
 type (
 	Ticker struct{ max, cur int }
 )
@@ -10,6 +12,11 @@ func (t *Ticker) Max() int {
 
 func (t *Ticker) Tick() bool {
 	t.cur++
+	return t.Done()
+}
+
+func (t *Ticker) TickBy(amount int) bool {
+	t.cur = util.MinInt(t.max, t.cur+amount)
 	return t.Done()
 }
 
