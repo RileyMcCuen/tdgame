@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"image/color"
 	"os"
 	"runtime/pprof"
 	"tdgame/asset"
@@ -35,7 +34,7 @@ type (
 )
 
 const (
-	MaxTPS = 32
+	MaxTPS = 32 * 512
 )
 
 func (g *Game) HandleInput() {
@@ -144,14 +143,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// draw ui
 	g.UI.Draw(con)
 
-	// draw circle radius of test tower
-	con.SetColor(color.Black)
-	con.DrawCircle(128, 0, 192)
-	con.Stroke()
-	con.SetRGBA(0, .95, 0, 0.2)
-	con.DrawCircle(128, 0, 192)
-	con.Fill()
-
 	// create ebiten image and copy it to screen
 	eimg := ebiten.NewImageFromImage(con.Image())
 	screen.DrawImage(eimg, &ebiten.DrawImageOptions{})
@@ -170,7 +161,7 @@ func (g *Game) NewRound(round, points int) *td.Round {
 	for i := range es {
 		es[i] = g.Declarations.EnemyAtlas.Enemy(g.StartLoc(), "slug")
 	}
-	return &td.Round{0, 128, round, points, core.NewTicker(0), es}
+	return &td.Round{0, 96, round, points, core.NewTicker(0), es}
 }
 
 func configureEbiten() {
@@ -193,6 +184,8 @@ func NewGame(assets, declarations, gameMap string) *Game {
 		asset.NewEffectList(),
 		[]td.Tower{
 			decs.Tower(core.Loc(core.Pt(128, 0), 0), "cannon"),
+			decs.Tower(core.Loc(core.Pt(128, 64), 0), "cannon"),
+			decs.Tower(core.Loc(core.Pt(128, 128), 0), "cannon"),
 		},
 		decs,
 		nil,

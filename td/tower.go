@@ -1,6 +1,7 @@
 package td
 
 import (
+	"image/color"
 	"tdgame/asset"
 	"tdgame/core"
 	"tdgame/util"
@@ -123,6 +124,13 @@ func (t *ShootingTower) Spawn(pl *ParticleList) Particle {
 }
 
 func (t *ShootingTower) Draw(con *gg.Context) {
+	// draw circle radius of test tower
+	con.SetColor(color.Black)
+	con.DrawCircle(float64(t.Location().X()), float64(t.Location().Y()), float64(t.Max*t.Speed))
+	con.Stroke()
+	con.SetRGBA(0, .95, 0, 0.2)
+	con.DrawCircle(float64(t.Location().X()), float64(t.Location().Y()), float64(t.Max*t.Speed))
+	con.Fill()
 	t.sprite.Draw(con, t.Location())
 }
 
