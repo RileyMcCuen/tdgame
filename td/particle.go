@@ -2,6 +2,7 @@ package td
 
 import (
 	"container/list"
+	"tdgame/animator"
 	"tdgame/asset"
 	"tdgame/core"
 	"tdgame/util"
@@ -10,6 +11,19 @@ import (
 )
 
 type (
+	EnemyAttributes struct {
+		Asset     core.Kind
+		Animation core.Kind
+		Effect    core.Kind
+		Health    int
+		Speed     int
+		Points    int
+	}
+	EnemySpec struct {
+		core.Meta
+		EnemyAttributes `yaml:"attributes"`
+	}
+	EnemyAtlas map[core.Kind]Enemy
 	Damageable interface {
 		Health() int
 		Damage(int)
@@ -39,7 +53,7 @@ type (
 		*EnemySpec
 		*core.LocationWrapper
 		*HealthBar
-		anim   *core.PrecalculatedAnimator
+		anim   *animator.PrecalculatedAnimator
 		sprite *asset.Sprite
 		effect *asset.SpriteEffect
 		e      *list.Element
@@ -52,6 +66,53 @@ type (
 		*list.List
 	}
 )
+
+const (
+	EnemyType    = "enemy"
+	BasicVariety = "basic"
+)
+
+func (es *EnemySpec) String() string {
+	return core.StructToYaml(es)
+}
+
+var _ core.DeclarationHandler = EnemyAtlas{}
+
+func NewEnemyAtlas() EnemyAtlas {
+	return EnemyAtlas{}
+}
+
+func (ea EnemyAtlas) Enemy(l core.Location, k core.Kind) Enemy {
+	return ea[k].CopyAt(l)
+}
+
+func (ea EnemyAtlas) AddEnemy(e Enemy) {
+	ea[e.Spec().Name] = e
+}
+
+func (ea EnemyAtlas) Type() core.Kind {
+	return EnemyType
+}
+
+func (ea EnemyAtlas) Match(pm *core.PreMeta) (core.Kinder, int) {
+	switch pm.Variety {
+	case BasicVariety:
+		return &EnemySpec{}, 5
+	default:
+		panic("variety of enemy does not exist")
+	}
+}
+
+func (ea EnemyAtlas) Load(spec core.Kinder, d *core.Declarations) {
+	assets := d.Get("asset").(asset.AssetAtlas)
+	anims := d.Get("animator").(animator.AnimatorAtlas)
+	switch es := spec.(type) {
+	case *EnemySpec:
+		ea[es.Name] = EnemyFromSpec(es, assets, anims)
+	default:
+		panic("variety of enemy does not exist")
+	}
+}
 
 func NewParticlePool(size int, c func() Particle) *ParticlePool {
 	return &ParticlePool{core.NewPool(size, func() core.PoolItem { return c() })}
@@ -135,7 +196,7 @@ func (hb *HealthBar) Copy() *HealthBar {
 	return NewHealthBar(hb.health)
 }
 
-func EnemyFromSpec(es *EnemySpec, assets asset.AssetAtlas, anims core.AnimatorAtlas) Enemy {
+func EnemyFromSpec(es *EnemySpec, assets asset.AssetAtlas, anims animator.AnimatorAtlas) Enemy {
 	switch es.Variety {
 	case "basic":
 		return &BasicEnemy{
@@ -209,7 +270,7 @@ func (e *BasicEnemy) Done() bool {
 }
 
 func (e *BasicEnemy) LocationAt(tick int) (core.Location, bool) {
-	return e.anim.LocationOffset(tick)
+	return e.anim.LocationOffset(tick * e.Speed())
 }
 
 func (e *BasicEnemy) CopyAt(l core.Location) Enemy {
@@ -217,7 +278,7 @@ func (e *BasicEnemy) CopyAt(l core.Location) Enemy {
 		e.EnemySpec,
 		core.LocWrapper(l),
 		e.HealthBar.Copy(),
-		e.anim.Copy().(*core.PrecalculatedAnimator),
+		e.anim.Copy().(*animator.PrecalculatedAnimator),
 		e.sprite.Copy().(*asset.Sprite),
 		e.effect.CopyAt(core.ZeroLoc).(*asset.SpriteEffect),
 		nil,

@@ -2,6 +2,7 @@ package td
 
 import (
 	"image/color"
+	"tdgame/animator"
 	"tdgame/asset"
 	"tdgame/core"
 	"tdgame/util"
@@ -10,7 +11,19 @@ import (
 )
 
 type (
-	Tower interface {
+	TowerAttributes struct {
+		ProjectileAttributes `yaml:"projectile"`
+		Asset                core.Kind
+		core.Range           // min, max ticks for projectile to reach enemy; min*speed, max*speed pixels donut radii
+		Delay                int
+		Cost                 int
+	}
+	TowerSpec struct {
+		core.Meta
+		TowerAttributes `yaml:"attributes"`
+	}
+	TowerAtlas map[core.Kind]Tower
+	Tower      interface {
 		Spec() *TowerSpec
 		core.Processor
 		core.Locator
@@ -29,9 +42,61 @@ type (
 	}
 )
 
+const (
+	TowerType       = "tower"
+	ShootingVariety = "shooting"
+)
+
+func (p ProjectileAttributes) Kind() core.Kind {
+	return p.Asset
+}
+
+func (ts *TowerSpec) String() string {
+	return core.StructToYaml(ts)
+}
+
+var _ core.DeclarationHandler = TowerAtlas{}
+
+func NewTowerAtlas() TowerAtlas {
+	return TowerAtlas{}
+}
+
+func (ta TowerAtlas) Tower(l core.Location, k core.Kind) Tower {
+	return ta[k].CopyAt(l)
+}
+
+func (ta TowerAtlas) AddTower(t Tower) {
+	ta[t.Spec().Name] = t
+}
+
+func (ta TowerAtlas) Type() core.Kind {
+	return TowerType
+}
+
+func (ta TowerAtlas) Match(pm *core.PreMeta) (spec core.Kinder, priority int) {
+	switch pm.Variety {
+	case ShootingVariety:
+		return &TowerSpec{}, 5
+	default:
+		panic("variety of tower does not exist")
+	}
+}
+
+func (ta TowerAtlas) Load(spec core.Kinder, d *core.Declarations) {
+	assets := d.Get("asset").(asset.AssetAtlas)
+	anims := d.Get("animator").(animator.AnimatorAtlas)
+	switch ts := spec.(type) {
+	case *TowerSpec:
+		ta[ts.Name] = TowerFromSpec(ts, assets, anims)
+	default:
+		panic("variety of tower does not exist")
+	}
+}
+
+var _ core.DeclarationHandler = TowerAtlas{}
 var _ Tower = (*ShootingTower)(nil)
 
-func TowerFromSpec(ts *TowerSpec, assets asset.AssetAtlas, anims core.AnimatorAtlas) Tower {
+func TowerFromSpec(ts *TowerSpec, assets asset.AssetAtlas, anims animator.AnimatorAtlas) Tower {
 	switch ts.Variety {
 	case "shooting":
 		proj := NewBullet(
@@ -81,7 +146,7 @@ func (t *ShootingTower) calculateTrajectory(e Enemy) Projectile {
 	}
 	// fmt.Println("\tclose enough")
 	// find tick to hit the enemy
-	for i := t.Min; i <= t.Max; i += t.ExplosionRadius {
+	for i := t.Min; i <= t.Max; i++ { // i += t.ExplosionRadius {
 		// fmt.Println("\t\t", i)
 		eLoc, ok := e.LocationAt(i)
 		if !ok {
@@ -90,7 +155,7 @@ func (t *ShootingTower) calculateTrajectory(e Enemy) Projectile {
 		if eLoc.Near(tPoint, util.Square(i*t.Speed)) {
 			// fmt.Println(t.proj, t.Location())
 			proj := t.proj.CopyAt(t.Location())
-			proj.UpdateTarget(core.AnimatorFromLine(tPoint, eLoc.Point, i), e)
+			proj.UpdateTarget(animator.AnimatorFromLine(tPoint, eLoc.Point, i), e)
 			return proj
 		}
 	}
@@ -126,11 +191,12 @@ func (t *ShootingTower) Spawn(pl *ParticleList) Particle {
 func (t *ShootingTower) Draw(con *gg.Context) {
 	// draw circle radius of test tower
 	if core.Grid {
+		centered := t.Location().Add(core.Pt(32, 32))
 		con.SetColor(color.Black)
-		con.DrawCircle(float64(t.Location().X()), float64(t.Location().Y()), float64(t.Max*t.Speed))
+		con.DrawCircle(float64(centered.X()), float64(centered.Y()), float64(t.Max*t.Speed))
 		con.Stroke()
 		con.SetRGBA(.9, .9, .9, 0.2)
-		con.DrawCircle(float64(t.Location().X()), float64(t.Location().Y()), float64(t.Max*t.Speed))
+		con.DrawCircle(float64(centered.X()), float64(centered.Y()), float64(t.Max*t.Speed))
 		con.Fill()
 	}
 	t.sprite.Draw(con, t.Location())

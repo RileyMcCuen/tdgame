@@ -1,0 +1,43 @@
+meta:
+  type: asset
+  variety: multi
+  name: path
+attributes:
+  file: ../../assets/path.png
+  width: 64
+  height: 64
+  assets:
+    - tags:
+        - NN
+        - SS
+      x: 0
+      y: 0
+    - tags:
+        - EE
+        - WW
+      x: 64
+      y: 0
+    - tags:
+        - SE
+        - WN
+      x: 128
+      y: 0
+    - tags:
+        - SW
+        - EN
+      x: 192
+      y: 0
+    - tags:
+        - ES
+        - NW
+      x: 256
+      y: 0
+    - tags:
+        - WS
+        - NE
+      x: 320
+      y: 0
+    - tags:
+        - BL
+      x: 384
+      y: 0

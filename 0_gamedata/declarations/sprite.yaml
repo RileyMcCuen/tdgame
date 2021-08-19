@@ -1,0 +1,25 @@
+meta:
+  type: asset
+  variety: sprite
+  name: allsprite
+attributes:
+  filePrefix: ../../assets
+  files:
+    - file: cannon.png
+      delay: 2
+      width: 64
+    - file: explosion.png
+      delay: 1
+      width: 16
+    - file: slug.png
+      delay: 3
+      width: 64
+    - file: slugdeath.png
+      delay: 3
+      width: 64
+    - file: spider.png
+      delay: 2
+      width: 64
+    - file: spiderdeath.png
+      delay: 3
+      width: 64

@@ -1,0 +1,6 @@
+meta:
+  type: graph
+  variety: cached
+  name: map
+attributes:
+  file: ../../maps/8x8.txt

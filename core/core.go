@@ -44,23 +44,23 @@ const (
 	E
 	S
 	W
-	Blk Kind = "BLK" // blank (not part of the path)
+	Bl Kind = "BL" // blank (not part of the path)
 	// Straights
-	NNS Kind = "NNS"
-	SSS Kind = "SSS"
-	EES Kind = "EES"
-	WWS Kind = "WWS"
+	NN Kind = "NN"
+	SS Kind = "SS"
+	EE Kind = "EE"
+	WW Kind = "WW"
 	// Turns
-	CLW Kind = "CLW" // Clockwise
-	CCW Kind = "CCW" // CounterClockwise
-	NET Kind = "NET"
-	NWT Kind = "NWT"
-	SET Kind = "SET"
-	SWT Kind = "SWT"
-	ENT Kind = "ENT"
-	EST Kind = "EST"
-	WNT Kind = "WNT"
-	WST Kind = "WST"
+	CL Kind = "CL" // Clockwise
+	CC Kind = "CC" // CounterClockwise
+	NE Kind = "NE"
+	NW Kind = "NW"
+	SE Kind = "SE"
+	SW Kind = "SW"
+	EN Kind = "EN"
+	ES Kind = "ES"
+	WN Kind = "WN"
+	WS Kind = "WS"
 )
 
 var (
@@ -152,11 +152,7 @@ func DirectionsToKind(entry, exit Direction) Kind {
 	if entry.Opposite() == exit {
 		panic("entry and exit cannot be opposite in Kind")
 	}
-	if entry == exit { // straight
-		return Kind(fmt.Sprintf("%s%sS", entry, exit))
-	} else { // turn
-		return Kind(fmt.Sprintf("%s%sT", entry, exit))
-	}
+	return Kind(fmt.Sprintf("%s%s", entry, exit))
 }
 
 func Pt(x, y int) Point {

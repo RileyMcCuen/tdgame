@@ -1,0 +1,8 @@
+meta:
+  type: asset
+  variety: static
+  name: allstatic
+attributes:
+  filePrefix: ../../assets
+  files:
+    - ball.png

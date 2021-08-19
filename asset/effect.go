@@ -14,6 +14,7 @@ type (
 		core.PoolItem
 		core.Locator
 		Drawer
+		Length() int
 		CopyAt(l core.Location) Effect
 	}
 	EffectList struct {
@@ -29,6 +30,10 @@ type (
 
 func NewSpriteEffect(l core.Location, s *Sprite) *SpriteEffect {
 	return &SpriteEffect{core.LocWrapper(l), s, nil, false, false}
+}
+
+func (s *SpriteEffect) Length() int {
+	return s.s.total * s.s.delay
 }
 
 func (s *SpriteEffect) Process(ticks int) {

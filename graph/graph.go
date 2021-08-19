@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"io/ioutil"
+	"path"
 	"strconv"
 	"strings"
 	"tdgame/asset"
@@ -12,6 +13,24 @@ import (
 	"tdgame/util"
 
 	"github.com/fogleman/gg"
+)
+
+type (
+	Graph interface {
+		Spec() *GraphSpec
+		Width() int
+		Height() int
+		Node(core.Point) *Node
+	}
+	GraphAttributes struct {
+		File string
+	}
+	GraphSpec struct {
+		core.Meta
+		GraphAttributes
+		FilePath string
+	}
+	GraphAtlas map[core.Kind]Graph
 )
 
 type (
@@ -25,18 +44,59 @@ type (
 		*Node
 	}
 	Nodes            []*Node
-	Graph            []Nodes
+	BasicGraph       []Nodes
 	CachedImageGraph struct {
+		*GraphSpec
 		// imageWithGrid, image *ebiten.Image
 		imageWithGrid, image image.Image
 		start                core.Point
 		path                 []core.Kind
-		Graph
+		BasicGraph
 	}
 )
 
+const (
+	Priority      = 1
+	GraphType     = "graph"
+	CachedVariety = "cached"
+)
+
+var _ core.DeclarationHandler = GraphAtlas{}
+
+func NewGraphAtlas() GraphAtlas {
+	ret := make(GraphAtlas)
+	return ret
+}
+
+func (ga GraphAtlas) Type() core.Kind {
+	return GraphType
+}
+
+func (ga GraphAtlas) Match(pm *core.PreMeta) (spec core.Kinder, priority int) {
+	switch pm.Variety {
+	case CachedVariety:
+		return &GraphSpec{FilePath: pm.FilePath}, 2
+	default:
+		panic("variety of graph does not exist")
+	}
+}
+
+func (ga GraphAtlas) Load(spec core.Kinder, decs *core.Declarations) {
+	switch spec.(type) {
+	case *GraphSpec:
+		g := spec.(*GraphSpec)
+		ga[g.Name] = GraphFromSpec(g, decs.Get(asset.AssetType).(asset.AssetAtlas))
+	default:
+		panic("variety of graph does not exist")
+	}
+}
+
+func (ga GraphAtlas) Graph(k core.Kind) Graph {
+	return ga[k]
+}
+
 func BlankNode(p core.Point) *Node {
-	return &Node{p, core.Blk, &asset.StaticAsset{}}
+	return &Node{p, core.Bl, &asset.StaticAsset{}}
 }
 
 func Nd(p core.Point, k core.Kind, a asset.Asset) *Node {
@@ -44,7 +104,7 @@ func Nd(p core.Point, k core.Kind, a asset.Asset) *Node {
 }
 
 func (n Node) IsBlank() bool {
-	return n.k == core.Blk
+	return n.k == core.Bl
 }
 
 func (n Node) Draw(con *gg.Context) {
@@ -59,11 +119,11 @@ func (n Node) String() string {
 	}
 }
 
-func NewGraph(width, height int) Graph {
+func NewGraph(width, height int) BasicGraph {
 	if width <= 0 || height <= 0 {
 		panic("graph must have width and height of >= 1")
 	}
-	ret := make(Graph, height)
+	ret := make(BasicGraph, height)
 	for i := range ret {
 		row := make(Nodes, width)
 		for j := range row {
@@ -74,8 +134,8 @@ func NewGraph(width, height int) Graph {
 	return ret
 }
 
-func GraphFromFile(fil string, aa asset.AssetAtlas) CachedImageGraph {
-	data, err := ioutil.ReadFile(fil)
+func GraphFromSpec(spec *GraphSpec, aa asset.AssetAtlas) CachedImageGraph {
+	data, err := ioutil.ReadFile(path.Join(spec.FilePath, spec.File))
 	util.Check(err)
 	sdata := string(data)
 	lines := strings.Split(sdata, "\n")
@@ -95,10 +155,10 @@ func GraphFromFile(fil string, aa asset.AssetAtlas) CachedImageGraph {
 	for i, line := range lines {
 		dirs[i] = core.StringToDirection(strings.TrimSpace(line))
 	}
-	return GraphFromPath(p, dirs, aa)
+	return GraphFromPath(spec, p, dirs, aa)
 }
 
-func GraphFromPath(start core.Point, dirs []core.Direction, aa asset.AssetAtlas) CachedImageGraph {
+func GraphFromPath(spec *GraphSpec, start core.Point, dirs []core.Direction, aa asset.AssetAtlas) CachedImageGraph {
 	p, width, height := start, start.X(), start.Y()
 	if width < 0 || height < 0 {
 		panic("start point coordinates must be positive")
@@ -152,26 +212,26 @@ func GraphFromPath(start core.Point, dirs []core.Direction, aa asset.AssetAtlas)
 	con = gg.NewContext(g.Size())
 	g.Draw(con)
 	eimgWithGrid := con.Image() // ebiten.NewImageFromImage(con.Image())
-	return CachedImageGraph{eimgWithGrid, eimg, start, kinds, g}
+	return CachedImageGraph{spec, eimgWithGrid, eimg, start, kinds, g}
 }
 
-func (g Graph) Height() int {
+func (g BasicGraph) Height() int {
 	return len(g)
 }
 
-func (g Graph) Width() int {
+func (g BasicGraph) Width() int {
 	return len(g[0])
 }
 
-func (g Graph) Contains(p core.Point) bool {
+func (g BasicGraph) Contains(p core.Point) bool {
 	return p.X() >= 0 && p.X() < g.Width() && p.Y() >= 0 && p.Y() < g.Height()
 }
 
-func (g Graph) Node(p core.Point) *Node {
+func (g BasicGraph) Node(p core.Point) *Node {
 	return g[p.Y()][p.X()]
 }
 
-func (g Graph) Neighbors(n Node) []NodeDirection {
+func (g BasicGraph) Neighbors(n Node) []NodeDirection {
 	ret := make([]NodeDirection, 0)
 	for _, d := range core.Directions {
 		p := n.Point.Neighbor(d)
@@ -182,11 +242,11 @@ func (g Graph) Neighbors(n Node) []NodeDirection {
 	return ret
 }
 
-func (g Graph) Size() (int, int) {
+func (g BasicGraph) Size() (int, int) {
 	return g.Width() * core.TileSizeInt, g.Height() * core.TileSizeInt
 }
 
-func (g Graph) String() string {
+func (g BasicGraph) String() string {
 	sb := strings.Builder{}
 	for _, row := range g {
 		for _, n := range row {
@@ -198,7 +258,7 @@ func (g Graph) String() string {
 	return sb.String()
 }
 
-func (g Graph) Draw(con *gg.Context) {
+func (g BasicGraph) Draw(con *gg.Context) {
 	for _, row := range g {
 		for _, n := range row {
 			n.Draw(con)
@@ -228,6 +288,10 @@ func (g CachedImageGraph) Path() []core.Kind {
 	return g.path
 }
 
+func (g CachedImageGraph) Spec() *GraphSpec {
+	return g.GraphSpec
+}
+
 // func (g CachedImageGraph) Draw(screen *ebiten.Image) {
 func (g CachedImageGraph) Draw(con *gg.Context) {
 	if core.Grid {
@@ -241,7 +305,7 @@ func (g CachedImageGraph) Draw(con *gg.Context) {
 
 func (g CachedImageGraph) InitialRotation() int {
 	rot := 0 /// SSS is first dir
-	if g.path[0] == core.EES {
+	if g.path[0] == core.EE {
 		rot = core.CounterClockwise(rot, 90)
 	}
 	return rot
@@ -249,7 +313,7 @@ func (g CachedImageGraph) InitialRotation() int {
 
 func (g CachedImageGraph) InitialPoint() core.Point {
 	ret := g.start
-	if g.path[0] == core.SSS {
+	if g.path[0] == core.SS {
 		ret = ret.Add(core.Pt(0, -1))
 	} else {
 		ret = ret.Add(core.Pt(-1, 0))

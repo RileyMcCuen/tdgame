@@ -2,8 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"runtime/pprof"
+	"tdgame/animator"
 	"tdgame/asset"
 	"tdgame/core"
 	"tdgame/graph"
@@ -20,13 +19,11 @@ import (
 type (
 	Game struct {
 		graph.CachedImageGraph
-		asset.AssetAtlas
-		core.AnimatorAtlas
 		Particles   *td.ParticleList
 		Projectiles *td.ProjectileList
 		Effects     *asset.EffectList
 		Towers      []td.Tower
-		*td.Declarations
+		*core.Declarations
 		r *td.Round
 		*ui.UI
 		t *core.Ticker
@@ -46,6 +43,9 @@ func (g *Game) HandleInput() {
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyG) {
 		core.Grid = !core.Grid
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyF) {
+		ebiten.SetFullscreen(!ebiten.IsFullscreen())
 	}
 }
 
@@ -165,37 +165,39 @@ func (g *Game) NewRound(round, points int) *td.Round {
 	es := make([]td.Enemy, points)
 	for i := range es {
 		if i%2 == 0 {
-			es[i] = g.Declarations.EnemyAtlas.Enemy(g.StartLoc(), "slug")
+			es[i] = g.Declarations.Get("enemy").(td.EnemyAtlas).Enemy(g.StartLoc(), "slug")
 		} else {
-			es[i] = g.Declarations.EnemyAtlas.Enemy(g.StartLoc(), "spider")
+			es[i] = g.Declarations.Get("enemy").(td.EnemyAtlas).Enemy(g.StartLoc(), "spider")
 		}
 	}
 	return &td.Round{0, 96, round, points, core.NewTicker(0), es}
 }
 
 func configureEbiten() {
-	// ebiten.SetFullscreen(true)
 	ebiten.SetMaxTPS(MaxTPS)
 	ebiten.SetWindowTitle("Tower Defense")
 }
 
-func NewGame(assets, declarations, gameMap string) *Game {
-	asAtlas := asset.MakeAssetAtlas(assets)
-	graph := graph.GraphFromFile(gameMap, asAtlas)
-	anAtlas := core.DefaultAnimatorAtlas
-	anAtlas.CreatePathAnimator(graph.StartLoc(), graph.Path())
-	decs := td.NewDeclarations(declarations, asAtlas, anAtlas)
+func NewGame(declarations string) *Game {
+	decs := core.NewDeclarations()
+	decs.RegisterHandlers(
+		asset.NewAssetAtlas(),
+		graph.NewGraphAtlas(),
+		animator.DefaultAnimatorAtlas,
+		td.NewTowerAtlas(),
+		td.NewEnemyAtlas(),
+	).AddDir(
+		declarations,
+	).Load()
 	g := &Game{
-		graph,
-		asAtlas,
-		core.DefaultAnimatorAtlas,
+		decs.Get(graph.GraphType).(graph.GraphAtlas).Graph("map").(graph.CachedImageGraph),
 		td.NewParticleList(),
 		td.NewProjectileList(),
 		asset.NewEffectList(),
 		[]td.Tower{
-			decs.Tower(core.Loc(core.Pt(128, 0), 0), "cannon"),
-			decs.Tower(core.Loc(core.Pt(256, 128), 0), "cannon"),
-			decs.Tower(core.Loc(core.Pt(384, 256), 0), "cannon"),
+			decs.Get("tower").(td.TowerAtlas).Tower(core.Loc(core.Pt(128, 0), 0), "cannon"),
+			decs.Get("tower").(td.TowerAtlas).Tower(core.Loc(core.Pt(256, 128), 0), "cannon"),
+			decs.Get("tower").(td.TowerAtlas).Tower(core.Loc(core.Pt(384, 256), 0), "cannon"),
 		},
 		decs,
 		nil,
@@ -207,14 +209,10 @@ func NewGame(assets, declarations, gameMap string) *Game {
 
 func main() {
 	configureEbiten()
-	g := NewGame(
-		"./0_gamedata/assets",
-		"./0_gamedata/declarations",
-		"./0_gamedata/maps/8x8.txt",
-	)
-	f, err := os.Create("poolprofile")
-	util.Check(err)
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
+	g := NewGame("./0_gamedata/declarations")
+	// f, err := os.Create("poolprofile")
+	// util.Check(err)
+	// pprof.StartCPUProfile(f)
+	// defer pprof.StopCPUProfile()
 	util.Check(ebiten.RunGame(g))
 }

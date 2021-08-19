@@ -1,0 +1,6 @@
+meta:
+  type: animator
+  variety: path
+  name: prepath
+attributes:
+  dummy: temporarystringuntilthisdoessomething

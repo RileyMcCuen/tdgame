@@ -2,6 +2,8 @@ package td
 
 import (
 	"container/list"
+	"fmt"
+	"tdgame/animator"
 	"tdgame/asset"
 	"tdgame/core"
 	"tdgame/util"
@@ -10,18 +12,26 @@ import (
 )
 
 type (
+	ProjectileAttributes struct {
+		Asset           core.Kind
+		Effect          core.Kind
+		PoolSize        int `yaml:"poolSize"`
+		Speed           int
+		Damage          int
+		ExplosionRadius int `yaml:"explosionRadius"`
+	}
 	Projectile interface {
 		Particle
 		Spec() *ProjectileAttributes
 		Destination() core.Location
 		CopyAt(l core.Location) Projectile
-		UpdateTarget(anim *core.PrecalculatedAnimator, e Enemy)
+		UpdateTarget(anim *animator.PrecalculatedAnimator, e Enemy)
 	}
 	Bullet struct {
 		*ProjectileAttributes
 		*core.LocationWrapper
 		asset  asset.Asset
-		anim   *core.PrecalculatedAnimator
+		anim   *animator.PrecalculatedAnimator
 		e      Enemy
 		el     *list.Element
 		active bool
@@ -62,7 +72,7 @@ func (pl *ProjectileList) For(f func(idx int, p Projectile) bool) {
 	}
 }
 
-func NewBullet(spec *ProjectileAttributes, a asset.Asset, start core.Location, anim *core.PrecalculatedAnimator, e Enemy, effect *asset.SpriteEffect) Projectile {
+func NewBullet(spec *ProjectileAttributes, a asset.Asset, start core.Location, anim *animator.PrecalculatedAnimator, e Enemy, effect *asset.SpriteEffect) Projectile {
 	return &Bullet{
 		spec,
 		core.LocWrapper(start),
@@ -80,7 +90,7 @@ func (b *Bullet) Spec() *ProjectileAttributes {
 }
 
 func (b *Bullet) Speed() int {
-	return b.ProjectileAttributes.Speed
+	return 1
 }
 
 func (b *Bullet) Process(ticks int) {
@@ -130,6 +140,7 @@ func (b *Bullet) Done() bool {
 
 func (b *Bullet) Finalize() asset.Effect {
 	if b.e.Active() {
+		fmt.Println(b.e.Spec().Name, b.e.Location(), " :::: ", b.Location())
 		b.e.Damage(b.Damage)
 	}
 	b.effect.SetLocation(core.Loc(b.Location().Add(core.Pt(24, 24)), 0))
@@ -140,7 +151,7 @@ func (b *Bullet) CopyAt(l core.Location) Projectile {
 	return NewBullet(b.ProjectileAttributes, b.asset.Copy(), b.Location(), nil, nil, b.effect.CopyAt(core.ZeroLoc).(*asset.SpriteEffect))
 }
 
-func (b *Bullet) UpdateTarget(anim *core.PrecalculatedAnimator, e Enemy) {
+func (b *Bullet) UpdateTarget(anim *animator.PrecalculatedAnimator, e Enemy) {
 	b.e = e
 	b.anim = anim
 }
@@ -148,4 +159,8 @@ func (b *Bullet) UpdateTarget(anim *core.PrecalculatedAnimator, e Enemy) {
 func (b *Bullet) Destination() core.Location {
 	l, _ := b.anim.LastLocation()
 	return l
+}
+
+func (b *Bullet) Effect() asset.Effect {
+	return b.effect
 }
