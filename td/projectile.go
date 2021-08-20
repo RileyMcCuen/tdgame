@@ -2,11 +2,10 @@ package td
 
 import (
 	"container/list"
-	"fmt"
 	"tdgame/animator"
 	"tdgame/asset"
 	"tdgame/core"
-	"tdgame/util"
+	"tdgame/graph"
 
 	"github.com/fogleman/gg"
 )
@@ -23,16 +22,14 @@ type (
 	Projectile interface {
 		Particle
 		Spec() *ProjectileAttributes
-		Destination() core.Location
-		CopyAt(l core.Location) Projectile
-		UpdateTarget(anim *animator.PrecalculatedAnimator, e Enemy)
+		CopyAt(l core.Location, g graph.Graph) Projectile
+		UpdateTarget(anim *animator.PrecalculatedAnimator)
 	}
 	Bullet struct {
 		*ProjectileAttributes
-		*core.LocationWrapper
+		*graph.TileLocation
 		asset  asset.Asset
 		anim   *animator.PrecalculatedAnimator
-		e      Enemy
 		el     *list.Element
 		active bool
 		effect *asset.SpriteEffect
@@ -72,17 +69,17 @@ func (pl *ProjectileList) For(f func(idx int, p Projectile) bool) {
 	}
 }
 
-func NewBullet(spec *ProjectileAttributes, a asset.Asset, start core.Location, anim *animator.PrecalculatedAnimator, e Enemy, effect *asset.SpriteEffect) Projectile {
-	return &Bullet{
+func NewBullet(spec *ProjectileAttributes, a asset.Asset, tl *graph.TileLocation, anim *animator.PrecalculatedAnimator, effect *asset.SpriteEffect) Projectile {
+	ret := &Bullet{
 		spec,
-		core.LocWrapper(start),
+		tl,
 		a,
 		anim,
-		e,
 		nil,
 		false,
 		effect,
 	}
+	return ret
 }
 
 func (b *Bullet) Spec() *ProjectileAttributes {
@@ -114,7 +111,6 @@ func (b *Bullet) Reset() {
 	b.asset.Reset()
 	b.LocationWrapper.SetLocation(core.Loc(core.Pt(-100, -100), 0)) // put off screen for the moment
 	b.anim = nil
-	b.e = nil
 	b.el = nil
 }
 
@@ -123,7 +119,7 @@ func (b *Bullet) Draw(con *gg.Context) {
 }
 
 func (b *Bullet) Near(o core.Point) bool {
-	return b.Location().Near(o, util.Square(b.ExplosionRadius))
+	return b.Location().Near(o, core.Square(b.ExplosionRadius))
 }
 
 func (b *Bullet) Elem() *list.Element {
@@ -139,20 +135,15 @@ func (b *Bullet) Done() bool {
 }
 
 func (b *Bullet) Finalize() asset.Effect {
-	if b.e.Active() {
-		fmt.Println(b.e.Spec().Name, b.e.Location(), " :::: ", b.Location())
-		b.e.Damage(b.Damage)
-	}
 	b.effect.SetLocation(core.Loc(b.Location().Add(core.Pt(24, 24)), 0))
 	return b.effect
 }
 
-func (b *Bullet) CopyAt(l core.Location) Projectile {
-	return NewBullet(b.ProjectileAttributes, b.asset.Copy(), b.Location(), nil, nil, b.effect.CopyAt(core.ZeroLoc).(*asset.SpriteEffect))
+func (b *Bullet) CopyAt(l core.Location, g graph.Graph) Projectile {
+	return NewBullet(b.ProjectileAttributes, b.asset.Copy(), b.TileLocation.Copy(), nil, b.effect.CopyAt(core.ZeroLoc).(*asset.SpriteEffect))
 }
 
-func (b *Bullet) UpdateTarget(anim *animator.PrecalculatedAnimator, e Enemy) {
-	b.e = e
+func (b *Bullet) UpdateTarget(anim *animator.PrecalculatedAnimator) {
 	b.anim = anim
 }
 

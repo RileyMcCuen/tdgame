@@ -5,9 +5,9 @@ meta:
 attributes:
   asset: cannon
   range:
-    min: 16
-    max: 96
-  delay: 64
+    min: 1
+    max: 2
+  delay: 1024
   cost: 100
   projectile:
     asset: ball

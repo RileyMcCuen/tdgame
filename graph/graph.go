@@ -6,21 +6,23 @@ import (
 	"image/color"
 	"io/ioutil"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"tdgame/asset"
 	"tdgame/core"
-	"tdgame/util"
 
 	"github.com/fogleman/gg"
 )
 
 type (
 	Graph interface {
+		core.Processor
 		Spec() *GraphSpec
 		Width() int
 		Height() int
 		Node(core.Point) *Node
+		TLoc(offset, size core.Point) *TileLocation
 	}
 	GraphAttributes struct {
 		File string
@@ -34,7 +36,30 @@ type (
 )
 
 type (
+	TileLocation struct {
+		g Graph
+		*core.LocationWrapper
+		Offset, Size core.Point
+		Tiles        [4]core.Point
+	}
+	Collider interface {
+		Location() core.Location
+		Radius() int
+		Near(Collider) bool
+		Kind() core.Kind
+	}
+	Damageable interface {
+		Collider
+		TakeDamage(amount int)
+	}
+	Damager interface {
+		Collider
+		DoDamage(Damageable)
+	}
 	Node struct {
+		dables        []Damageable
+		dmgers        []Damager
+		distanceToEnd int
 		core.Point
 		k core.Kind
 		a asset.Asset
@@ -81,6 +106,10 @@ func (ga GraphAtlas) Match(pm *core.PreMeta) (spec core.Kinder, priority int) {
 	}
 }
 
+func (ga GraphAtlas) PreLoad(d *core.Declarations) {
+
+}
+
 func (ga GraphAtlas) Load(spec core.Kinder, decs *core.Declarations) {
 	switch spec.(type) {
 	case *GraphSpec:
@@ -95,12 +124,66 @@ func (ga GraphAtlas) Graph(k core.Kind) Graph {
 	return ga[k]
 }
 
-func BlankNode(p core.Point) *Node {
-	return &Node{p, core.Bl, &asset.StaticAsset{}}
+func (g CachedImageGraph) TLoc(offset, size core.Point) *TileLocation {
+	return &TileLocation{
+		g,
+		nil,
+		offset,
+		size,
+		[4]core.Point{},
+	}
 }
 
-func Nd(p core.Point, k core.Kind, a asset.Asset) *Node {
-	return &Node{p, k, a}
+func (t *TileLocation) calculateTiles(col Collider) {
+	center, half := t.LocationWrapper.Location().Add(t.Offset), t.Size.Reduce(2)
+	ohalf := half.Multiply(core.Pt(1, -1))
+	nw := center.Subtract(half)
+	ne := center.Add(ohalf)
+	sw := center.Subtract(ohalf)
+	se := center.Add(half)
+	tiles := [4]core.Point{nw.TileIndex(), ne.TileIndex(), sw.TileIndex(), se.TileIndex()}
+	for i := 0; i < 4; i++ {
+		tile, match := t.Tiles[i], false
+		for j := 0; j < 4; j++ {
+			match = match || tile == tiles[j]
+		}
+		if !match {
+			// do remove, tile is not in new tiles
+			t.g.Node(tile).Remove(col)
+		}
+	}
+	for i := 0; i < 4; i++ {
+		tile, match := tiles[i], false
+		for j := 0; j < 4; j++ {
+			match = match || tile == t.Tiles[j]
+		}
+		if !match {
+			// do add, tile is not in old tiles
+			t.g.Node(tile).Add(col)
+		}
+	}
+	t.Tiles = tiles
+}
+
+func (t *TileLocation) Move(l core.Location, col Collider) {
+	if t.LocationWrapper.Location().Point == l.Point {
+		t.SetRot(l.Rot())
+		return
+	}
+	t.SetLocation(l)
+	t.calculateTiles(col)
+}
+
+func (t *TileLocation) Copy() *TileLocation {
+	return t.g.TLoc(t.Offset, t.Size)
+}
+
+func BlankNode(p core.Point) *Node {
+	return &Node{make([]Damageable, 0), make([]Damager, 0), 0, p, core.Bl, &asset.StaticAsset{}}
+}
+
+func Nd(dist int, p core.Point, k core.Kind, a asset.Asset) *Node {
+	return &Node{make([]Damageable, 0), make([]Damager, 0), dist, p, k, a}
 }
 
 func (n Node) IsBlank() bool {
@@ -119,6 +202,48 @@ func (n Node) String() string {
 	}
 }
 
+func (n Node) Add(col Collider) {
+	switch d := col.(type) {
+	case Damageable:
+		n.dables = append(n.dables, d)
+	case Damager:
+		n.dmgers = append(n.dmgers, d)
+	default:
+		panic("cannot add non Collider, not Damager nor Damageable")
+	}
+}
+
+func (n Node) Remove(col Collider) {
+	switch d := col.(type) {
+	case Damageable:
+		for i, dable := range n.dables {
+			if dable == d {
+				n.dables = append(n.dables[:i], n.dables[i+1:]...)
+			}
+		}
+	case Damager:
+		for i, dmger := range n.dmgers {
+			if dmger == d {
+				n.dmgers = append(n.dmgers[:i], n.dmgers[i+1:]...)
+			}
+		}
+	default:
+		panic("cannot add non Collider, not Damager nor Damageable")
+	}
+}
+
+func (n Node) Process(ticks int) {
+	for _, dmger := range n.dmgers {
+		for _, dable := range n.dables {
+			if dmger.Near(dable) {
+
+			}
+		}
+	}
+}
+
+func (n Node) Done() bool { return false }
+
 func NewGraph(width, height int) BasicGraph {
 	if width <= 0 || height <= 0 {
 		panic("graph must have width and height of >= 1")
@@ -136,7 +261,7 @@ func NewGraph(width, height int) BasicGraph {
 
 func GraphFromSpec(spec *GraphSpec, aa asset.AssetAtlas) CachedImageGraph {
 	data, err := ioutil.ReadFile(path.Join(spec.FilePath, spec.File))
-	util.Check(err)
+	core.Check(err)
 	sdata := string(data)
 	lines := strings.Split(sdata, "\n")
 	if len(lines) < 1 {
@@ -148,9 +273,9 @@ func GraphFromSpec(spec *GraphSpec, aa asset.AssetAtlas) CachedImageGraph {
 	}
 	lines = lines[1:]
 	x, err := strconv.Atoi(pStrs[1])
-	util.Check(err)
+	core.Check(err)
 	y, err := strconv.Atoi(pStrs[2])
-	util.Check(err)
+	core.Check(err)
 	p, dirs := core.Pt(x, y), make([]core.Direction, len(lines))
 	for i, line := range lines {
 		dirs[i] = core.StringToDirection(strings.TrimSpace(line))
@@ -171,7 +296,7 @@ func GraphFromPath(spec *GraphSpec, start core.Point, dirs []core.Direction, aa 
 		if p.X() < 0 || p.Y() < 0 {
 			panic("point in path has negative coordinates which are not allowed")
 		}
-		width, height = util.MaxInt(width, p.X()), util.MaxInt(height, p.Y())
+		width, height = core.MaxInt(width, p.X()), core.MaxInt(height, p.Y())
 	}
 	end, g := p, NewGraph(width+1, height+1)
 	if end.X() != width && end.Y() != height {
@@ -193,9 +318,10 @@ func GraphFromPath(spec *GraphSpec, start core.Point, dirs []core.Direction, aa 
 		entry, exit := dirs[i-1], dirs[i]
 		k := core.DirectionsToKind(entry, exit)
 		kinds[i-1] = k
-		g[p.Y()][p.X()] = Nd(p, k, aa.Asset(k))
+		g[p.Y()][p.X()] = Nd(len(dirs)-i, p, k, aa.Asset(k))
 		p = p.Neighbor(exit)
 	}
+	kinds = append(kinds, core.DirectionsToKind(dirs[len(dirs)-1], dirs[len(dirs)-1]))
 	blankAsset := aa.Blank()
 	for _, row := range g {
 		for _, n := range row {
@@ -215,6 +341,16 @@ func GraphFromPath(spec *GraphSpec, start core.Point, dirs []core.Direction, aa 
 	return CachedImageGraph{spec, eimgWithGrid, eimg, start, kinds, g}
 }
 
+func (g BasicGraph) Process(ticks int) {
+	for _, row := range g {
+		for _, nd := range row {
+			nd.Process(ticks)
+		}
+	}
+}
+
+func (g BasicGraph) Done() bool { return false }
+
 func (g BasicGraph) Height() int {
 	return len(g)
 }
@@ -228,6 +364,9 @@ func (g BasicGraph) Contains(p core.Point) bool {
 }
 
 func (g BasicGraph) Node(p core.Point) *Node {
+	if p.X() < 0 || p.Y() < 0 || p.X() >= g.Width() || p.Y() >= g.Height() {
+		return nil
+	}
 	return g[p.Y()][p.X()]
 }
 
@@ -256,6 +395,22 @@ func (g BasicGraph) String() string {
 		sb.WriteString("\n")
 	}
 	return sb.String()
+}
+
+func (g BasicGraph) TilesAround(p core.Point, rng core.Range) []*Node {
+	tp, ret := p.TileIndex(), make([]*Node, 0)
+	for dist := rng.Min; dist < rng.Max; dist++ {
+		for i := -dist; i <= dist; i++ {
+			for j := -dist; j <= dist; j++ {
+				ntp := tp.Add(core.Pt(i, j))
+				if nd := g.Node(ntp); nd != nil {
+					ret = append(ret, nd)
+				}
+			}
+		}
+	}
+	sort.Slice(ret, func(i, j int) bool { return ret[i].distanceToEnd < ret[j].distanceToEnd })
+	return ret
 }
 
 func (g BasicGraph) Draw(con *gg.Context) {

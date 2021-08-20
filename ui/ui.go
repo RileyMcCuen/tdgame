@@ -3,7 +3,7 @@ package ui
 import (
 	"fmt"
 	"image/color"
-	"tdgame/util"
+	"tdgame/core"
 
 	"github.com/fogleman/gg"
 	"github.com/golang/freetype/truetype"
@@ -89,7 +89,7 @@ func (ui *UI) Health() int {
 
 func NewHealthAndScoreUI() *RoundHealthScoreUI {
 	font, err := truetype.Parse(goregular.TTF)
-	util.Check(err)
+	core.Check(err)
 	face := truetype.NewFace(font, &truetype.Options{Size: large})
 	return &RoundHealthScoreUI{&RoundHealthScoreState{0, 100, 0}, face, large, offWhite}
 }

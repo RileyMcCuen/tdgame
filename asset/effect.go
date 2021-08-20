@@ -13,7 +13,7 @@ type (
 		core.ListItem
 		core.PoolItem
 		core.Locator
-		Drawer
+		core.Drawer
 		Length() int
 		CopyAt(l core.Location) Effect
 	}

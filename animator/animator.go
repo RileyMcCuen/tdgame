@@ -222,6 +222,10 @@ func (aa AnimatorAtlas) Match(pm *core.PreMeta) (core.Kinder, int) {
 	}
 }
 
+func (aa AnimatorAtlas) PreLoad(d *core.Declarations) {
+
+}
+
 func (aa AnimatorAtlas) Load(spec core.Kinder, d *core.Declarations) {
 	g := d.Get(graph.GraphType).(graph.GraphAtlas).Graph("map").(graph.CachedImageGraph)
 	switch spec.(type) {

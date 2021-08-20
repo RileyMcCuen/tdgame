@@ -1,11 +1,12 @@
 package td
 
 import (
+	"fmt"
 	"image/color"
 	"tdgame/animator"
 	"tdgame/asset"
 	"tdgame/core"
-	"tdgame/util"
+	"tdgame/graph"
 
 	"github.com/fogleman/gg"
 )
@@ -22,18 +23,24 @@ type (
 		core.Meta
 		TowerAttributes `yaml:"attributes"`
 	}
-	TowerAtlas map[core.Kind]Tower
-	Tower      interface {
+	TowerAtlas struct {
+		tows   map[core.Kind]Tower
+		assets asset.AssetAtlas
+		anims  animator.AnimatorAtlas
+		graphs graph.GraphAtlas
+	}
+	Tower interface {
 		Spec() *TowerSpec
 		core.Processor
 		core.Locator
-		asset.Drawer
+		core.Drawer
 		Spawn(enemies *ParticleList) Particle
-		CopyAt(loc core.Location) Tower
+		CopyAt(loc core.Location, ta *TowerAtlas) Tower
 	}
 	ShootingTower struct {
 		*TowerSpec
 		*core.LocationWrapper
+		nodes []*graph.Node
 		// TODO: ProjectilePool
 		enemyLoc *core.Location
 		sprite   *asset.Sprite
@@ -55,25 +62,27 @@ func (ts *TowerSpec) String() string {
 	return core.StructToYaml(ts)
 }
 
-var _ core.DeclarationHandler = TowerAtlas{}
+var _ core.DeclarationHandler = (*TowerAtlas)(nil)
 
-func NewTowerAtlas() TowerAtlas {
-	return TowerAtlas{}
+func NewTowerAtlas() *TowerAtlas {
+	return &TowerAtlas{
+		tows: make(map[core.Kind]Tower),
+	}
 }
 
-func (ta TowerAtlas) Tower(l core.Location, k core.Kind) Tower {
-	return ta[k].CopyAt(l)
+func (ta *TowerAtlas) Tower(l core.Location, k core.Kind) Tower {
+	return ta.tows[k].CopyAt(l, ta)
 }
 
-func (ta TowerAtlas) AddTower(t Tower) {
-	ta[t.Spec().Name] = t
+func (ta *TowerAtlas) AddTower(t Tower) {
+	ta.tows[t.Spec().Name] = t
 }
 
-func (ta TowerAtlas) Type() core.Kind {
+func (ta *TowerAtlas) Type() core.Kind {
 	return TowerType
 }
 
-func (ta TowerAtlas) Match(pm *core.PreMeta) (spec core.Kinder, priority int) {
+func (ta *TowerAtlas) Match(pm *core.PreMeta) (spec core.Kinder, priority int) {
 	switch pm.Variety {
 	case ShootingVariety:
 		return &TowerSpec{}, 5
@@ -82,28 +91,34 @@ func (ta TowerAtlas) Match(pm *core.PreMeta) (spec core.Kinder, priority int) {
 	}
 }
 
-func (ta TowerAtlas) Load(spec core.Kinder, d *core.Declarations) {
-	assets := d.Get("asset").(asset.AssetAtlas)
-	anims := d.Get("animator").(animator.AnimatorAtlas)
+func (ta *TowerAtlas) PreLoad(d *core.Declarations) {
+	ta.assets = d.Get(asset.AssetType).(asset.AssetAtlas)
+	ta.anims = d.Get(animator.AnimatorType).(animator.AnimatorAtlas)
+	ta.graphs = d.Get(graph.GraphType).(graph.GraphAtlas)
+}
+
+func (ta *TowerAtlas) Load(spec core.Kinder, d *core.Declarations) {
+	fmt.Println(ta.graphs)
+	graph := ta.graphs.Graph("map").(graph.CachedImageGraph)
 	switch ts := spec.(type) {
 	case *TowerSpec:
-		ta[ts.Name] = TowerFromSpec(ts, assets, anims)
+		ta.tows[ts.Name] = TowerFromSpec(ts, ta.assets, ta.anims, graph)
 	default:
 		panic("variety of tower does not exist")
 	}
 }
 
-var _ core.DeclarationHandler = TowerAtlas{}
+var _ core.DeclarationHandler = (*TowerAtlas)(nil)
 var _ Tower = (*ShootingTower)(nil)
 
-func TowerFromSpec(ts *TowerSpec, assets asset.AssetAtlas, anims animator.AnimatorAtlas) Tower {
+func TowerFromSpec(ts *TowerSpec, assets asset.AssetAtlas, anims animator.AnimatorAtlas, g graph.CachedImageGraph) Tower {
 	switch ts.Variety {
 	case "shooting":
+		projAsset := assets.Asset(ts.ProjectileAttributes.Asset)
 		proj := NewBullet(
 			&ts.ProjectileAttributes,
-			assets.Asset(ts.ProjectileAttributes.Asset),
-			core.ZeroLoc,
-			nil,
+			projAsset,
+			g.TLoc(projAsset.Offset(), projAsset.Size()),
 			nil,
 			asset.NewSpriteEffect(
 				core.ZeroLoc,
@@ -113,6 +128,7 @@ func TowerFromSpec(ts *TowerSpec, assets asset.AssetAtlas, anims animator.Animat
 		return &ShootingTower{
 			ts,
 			core.LocWrapper(core.ZeroLoc),
+			nil,
 			nil,
 			assets.Sprite(ts.Asset),
 			core.NewTicker(ts.Delay),
@@ -139,26 +155,26 @@ func (t *ShootingTower) Done() bool { return false }
 
 func (t *ShootingTower) calculateTrajectory(e Enemy) Projectile {
 	// fmt.Println("\tstart")
-	tPoint := t.Location().Point
-	// if enemy is within range
-	if e.Location().DistanceSquared(tPoint) >= util.Square(t.Max*t.Speed) {
-		return nil
-	}
-	// fmt.Println("\tclose enough")
-	// find tick to hit the enemy
-	for i := t.Min; i <= t.Max; i++ { // i += t.ExplosionRadius {
-		// fmt.Println("\t\t", i)
-		eLoc, ok := e.LocationAt(i)
-		if !ok {
-			return nil
-		}
-		if eLoc.Near(tPoint, util.Square(i*t.Speed)) {
-			// fmt.Println(t.proj, t.Location())
-			proj := t.proj.CopyAt(t.Location())
-			proj.UpdateTarget(animator.AnimatorFromLine(tPoint, eLoc.Point, i), e)
-			return proj
-		}
-	}
+	// tPoint := t.Location().Point
+	// // if enemy is within range
+	// if e.Location().DistanceSquared(tPoint) >= util.Square(t.Max*t.Speed) {
+	// 	return nil
+	// }
+	// // fmt.Println("\tclose enough")
+	// // find tick to hit the enemy
+	// for i := t.Min; i <= t.Max; i++ { // i += t.ExplosionRadius {
+	// 	// fmt.Println("\t\t", i)
+	// 	eLoc, ok := e.LocationAt(i)
+	// 	if !ok {
+	// 		return nil
+	// 	}
+	// 	if eLoc.Near(tPoint, util.Square(i*t.Speed)) {
+	// 		// fmt.Println(t.proj, t.Location())
+	// 		proj := t.proj.CopyAt(t.Location())
+	// 		proj.UpdateTarget(animator.AnimatorFromLine(tPoint, eLoc.Point, i), e)
+	// 		return proj
+	// 	}
+	// }
 	// fmt.Println("\tfinished for")
 	return nil
 }
@@ -170,21 +186,7 @@ func (t *ShootingTower) Spawn(pl *ParticleList) Particle {
 	} else {
 		return ret
 	}
-	pl.For(func(idx int, p Particle) bool {
-		// fmt.Println(idx)
-		enemy := p.(Enemy)
-		np := t.calculateTrajectory(enemy)
-		// fmt.Println("traj")
-		if np != nil {
-			ret = np
-			dest := np.Destination()
-			t.enemyLoc = &dest
-			t.LocationWrapper.SetLocation(t.Location().RotateByATan2(dest))
-			return true
-		}
-		// fmt.Println(idx)
-		return false
-	})
+	// TODO: new projectile spawn logic
 	return ret
 }
 
@@ -202,14 +204,17 @@ func (t *ShootingTower) Draw(con *gg.Context) {
 	t.sprite.Draw(con, t.Location())
 }
 
-func (t *ShootingTower) CopyAt(l core.Location) Tower {
+func (t *ShootingTower) CopyAt(l core.Location, ta *TowerAtlas) Tower {
+	ter := core.NewTicker(t.Delay)
+	ter.TickBy(t.Delay)
 	return &ShootingTower{
 		t.TowerSpec,
 		core.LocWrapper(l),
+		ta.graphs.Graph("map").(graph.CachedImageGraph).TilesAround(l.Point, t.Range),
 		nil,
 		t.sprite.Copy().(*asset.Sprite),
-		core.NewTicker(t.Delay),
-		t.proj.CopyAt(l),
+		ter,
+		t.proj.CopyAt(l, ta.graphs.Graph("map")),
 	}
 }
 

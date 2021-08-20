@@ -5,7 +5,7 @@ import (
 	"tdgame/animator"
 	"tdgame/asset"
 	"tdgame/core"
-	"tdgame/util"
+	"tdgame/graph"
 
 	"github.com/fogleman/gg"
 )
@@ -35,7 +35,7 @@ type (
 		core.Locator
 		core.PoolItem
 		core.ListItem
-		asset.Drawer
+		core.Drawer
 		Finalize() asset.Effect
 	}
 	Enemy interface {
@@ -51,7 +51,7 @@ type (
 	}
 	BasicEnemy struct {
 		*EnemySpec
-		*core.LocationWrapper
+		*graph.TileLocation
 		*HealthBar
 		anim   *animator.PrecalculatedAnimator
 		sprite *asset.Sprite
@@ -103,12 +103,17 @@ func (ea EnemyAtlas) Match(pm *core.PreMeta) (core.Kinder, int) {
 	}
 }
 
+func (ea EnemyAtlas) PreLoad(d *core.Declarations) {
+
+}
+
 func (ea EnemyAtlas) Load(spec core.Kinder, d *core.Declarations) {
 	assets := d.Get("asset").(asset.AssetAtlas)
 	anims := d.Get("animator").(animator.AnimatorAtlas)
+	g := d.Get("graph").(graph.GraphAtlas).Graph("map").(graph.CachedImageGraph)
 	switch es := spec.(type) {
 	case *EnemySpec:
-		ea[es.Name] = EnemyFromSpec(es, assets, anims)
+		ea[es.Name] = EnemyFromSpec(es, assets, anims, g)
 	default:
 		panic("variety of enemy does not exist")
 	}
@@ -176,7 +181,7 @@ func (hb *HealthBar) Health() int {
 
 func (hb *HealthBar) Damage(amount int) {
 	hb.health -= amount
-	hb.health = util.MaxInt(0, hb.health)
+	hb.health = core.MaxInt(0, hb.health)
 }
 
 func (hb *HealthBar) Destroyed() bool {
@@ -189,22 +194,23 @@ func (hb *HealthBar) Reset() {
 
 func (hb *HealthBar) Heal(amount int) {
 	hb.health += amount
-	hb.health = util.MinInt(hb.health, hb.max)
+	hb.health = core.MinInt(hb.health, hb.max)
 }
 
 func (hb *HealthBar) Copy() *HealthBar {
 	return NewHealthBar(hb.health)
 }
 
-func EnemyFromSpec(es *EnemySpec, assets asset.AssetAtlas, anims animator.AnimatorAtlas) Enemy {
+func EnemyFromSpec(es *EnemySpec, assets asset.AssetAtlas, anims animator.AnimatorAtlas, g graph.CachedImageGraph) Enemy {
 	switch es.Variety {
 	case "basic":
+		sp := assets.Sprite(es.Asset)
 		return &BasicEnemy{
 			es,
-			core.LocWrapper(core.ZeroLoc),
+			g.TLoc(sp.Offset(), sp.Size()),
 			NewHealthBar(es.Health),
 			anims.PrecalculatedAnimator(es.Animation),
-			assets.Sprite(es.Asset),
+			sp,
 			asset.NewSpriteEffect(core.ZeroLoc, assets.Sprite(es.Effect)),
 			nil,
 			false,
@@ -273,10 +279,18 @@ func (e *BasicEnemy) LocationAt(tick int) (core.Location, bool) {
 	return e.anim.LocationOffset(tick * e.Speed())
 }
 
+func (e *BasicEnemy) Radius() int {
+	return e.Size.X() / 2
+}
+
+func (e *BasicEnemy) Near(col graph.Collider) bool {
+	return e.Location().Near(col.Location().Point, e.Radius()+col.Radius())
+}
+
 func (e *BasicEnemy) CopyAt(l core.Location) Enemy {
-	return &BasicEnemy{
+	ret := &BasicEnemy{
 		e.EnemySpec,
-		core.LocWrapper(l),
+		e.TileLocation.Copy(),
 		e.HealthBar.Copy(),
 		e.anim.Copy().(*animator.PrecalculatedAnimator),
 		e.sprite.Copy().(*asset.Sprite),
@@ -284,4 +298,6 @@ func (e *BasicEnemy) CopyAt(l core.Location) Enemy {
 		nil,
 		false,
 	}
+	ret.TileLocation.Move(l, ret)
+	return ret
 }

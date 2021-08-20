@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-	"tdgame/util"
 
 	"gopkg.in/yaml.v3"
 )
@@ -36,6 +35,8 @@ type (
 	DeclarationHandler interface {
 		Type() Kind
 		Match(pm *PreMeta) (spec Kinder, priority int)
+		// PreLoad is called on each DeclarationHandler after all matching has been done
+		PreLoad(d *Declarations)
 		Load(spec Kinder, decs *Declarations)
 	}
 	Spec struct {
@@ -54,7 +55,7 @@ func (m Meta) Kind() Kind {
 
 func StructToYaml(in interface{}) string {
 	out, err := yaml.Marshal(in)
-	util.Check(err)
+	Check(err)
 	return string(out)
 }
 
@@ -71,7 +72,7 @@ func (d *Declarations) HandlePreMeta(pm *PreMeta) {
 		attrVal := derefVal.FieldByNameFunc(func(s string) bool {
 			return strings.Contains(s, "Attributes")
 		})
-		util.Check(pm.Attributes.Decode(attrVal.Addr().Interface()))
+		Check(pm.Attributes.Decode(attrVal.Addr().Interface()))
 		d.specs = append(d.specs, Spec{spec, prior})
 	} else {
 		panic("declaration handler returned nil")
@@ -92,7 +93,7 @@ func (d *Declarations) RegisterHandlers(dhs ...DeclarationHandler) *Declarations
 
 func (d *Declarations) AddDir(dir string) *Declarations {
 	entries, err := os.ReadDir(dir)
-	util.Check(err)
+	Check(err)
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), ".") {
 			continue
@@ -106,14 +107,17 @@ func (d *Declarations) AddDir(dir string) *Declarations {
 func (d *Declarations) AddFile(fil string) *Declarations {
 	log.Println("Adding file:", fil)
 	data, err := os.ReadFile(fil)
-	util.Check(err)
+	Check(err)
 	pm := &PreMeta{Meta{}, fil, yaml.Node{}}
-	util.Check(yaml.Unmarshal(data, pm))
+	Check(yaml.Unmarshal(data, pm))
 	d.HandlePreMeta(pm)
 	return d
 }
 
 func (d *Declarations) Load() *Declarations {
+	for _, handler := range d.handlers {
+		handler.PreLoad(d)
+	}
 	// sort specs by priority
 	sort.Slice(d.specs, func(i, j int) bool {
 		return d.specs[i].priority < d.specs[j].priority

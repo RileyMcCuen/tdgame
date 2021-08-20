@@ -8,7 +8,6 @@ import (
 	"path"
 	"strings"
 	"tdgame/core"
-	"tdgame/util"
 )
 
 type (
@@ -103,7 +102,9 @@ func (spec *SpriteSpec) AddAssets(aa AssetAtlas) {
 			imgs[i] = img.(SubImager).SubImage(r)
 		}
 		t := core.NewTicker(fil.Delay)
-		aa[name] = &Sprite{img, imgs, total, fil.Delay, 0, fil.Width, t}
+		size := core.Pt(fil.Width, img.Bounds().Max.Y)
+		offset := core.TileSizePt.Subtract(size).Reduce(2)
+		aa[name] = &Sprite{img, imgs, offset, size, total, fil.Delay, 0, fil.Width, t}
 	}
 }
 
@@ -158,6 +159,10 @@ func (aa AssetAtlas) Match(pm *core.PreMeta) (core.Kinder, int) {
 	}
 }
 
+func (aa AssetAtlas) PreLoad(d *core.Declarations) {
+
+}
+
 func (aa AssetAtlas) Load(spec core.Kinder, decs *core.Declarations) {
 	switch s := spec.(type) {
 	case *StaticSpec:
@@ -173,8 +178,8 @@ func (aa AssetAtlas) Load(spec core.Kinder, decs *core.Declarations) {
 
 func readPNG(file string) image.Image {
 	data, err := os.ReadFile(file)
-	util.Check(err)
+	core.Check(err)
 	img, _, err := image.Decode(bytes.NewBuffer(data))
-	util.Check(err)
+	core.Check(err)
 	return img
 }

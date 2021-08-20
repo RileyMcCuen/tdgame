@@ -6,7 +6,6 @@ import (
 	"log"
 	"math"
 	"regexp"
-	"tdgame/util"
 
 	"github.com/fogleman/gg"
 )
@@ -27,6 +26,9 @@ type (
 	Processor interface {
 		Process(tick int)
 		Done() bool
+	}
+	Drawer interface {
+		Draw(con *gg.Context)
 	}
 	Locator interface {
 		Location() Location
@@ -209,8 +211,12 @@ func (p Point) Coordinates() (float64, float64, float64, float64) {
 		TileSize
 }
 
-func (p Point) Near(o Point, rSquared int) bool {
-	return p.DistanceSquared(o) <= rSquared
+func (p Point) Near(o Point, maxDist int) bool {
+	return p.DistanceSquared(o) <= Square(maxDist)
+}
+
+func (p Point) Reduce(r int) Point {
+	return Pt(p.x/r, p.y/r)
 }
 
 func (p Point) Scale(s int) Point {
@@ -225,12 +231,21 @@ func (p Point) Subtract(o Point) Point {
 	return Pt(p.x-o.x, p.y-o.y)
 }
 
+func (p Point) Multiply(o Point) Point {
+	return Pt(p.x*o.x, p.y*o.y)
+}
+
 func (p Point) DistanceSquared(o Point) int {
-	return util.Square(p.x-o.x) + util.Square(p.y-o.y)
+	p = p.Subtract(o)
+	return Square(p.x) + Square(p.y)
 }
 
 func (p Point) String() string {
 	return fmt.Sprintf("(%d,%d)", p.x, p.y)
+}
+
+func (p Point) TileIndex() Point {
+	return p.Reduce(TileSizeInt)
 }
 
 func LocWrapper(l Location) *LocationWrapper {
