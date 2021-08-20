@@ -90,11 +90,12 @@ func (b *Bullet) Speed() int {
 	return 1
 }
 
-func (b *Bullet) Process(ticks int) {
+func (b *Bullet) Process(ticks int, con core.Context) bool {
 	if !b.Done() {
-		b.asset.Process(ticks)
+		b.asset.Process(ticks, con)
 		b.anim.Animate(b)
 	}
+	return false
 }
 
 func (b *Bullet) Active() bool {

@@ -4,14 +4,18 @@ import "tdgame/core"
 
 type (
 	Round struct {
+		core.GameObjectNoop
 		Cur, Delay, Round, Points int
 		T                         *core.Ticker
 		Enemies                   []Enemy
 	}
 )
 
-func (r *Round) Process(ticks int) {
+var _ core.GameObject = (*Round)(nil)
+
+func (r *Round) Process(ticks int, con core.Context) bool {
 	r.T.Tick()
+	return false
 }
 
 func (r *Round) Done() bool {

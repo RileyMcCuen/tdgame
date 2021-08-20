@@ -250,9 +250,10 @@ func (e *BasicEnemy) Reset() {
 	e.SetLocation(core.ZeroLoc)
 }
 
-func (e *BasicEnemy) Process(ticks int) {
-	e.sprite.Process(ticks)
+func (e *BasicEnemy) Process(ticks int, con core.Context) bool {
+	e.sprite.Process(ticks, con)
 	e.anim.Animate(e)
+	return false
 }
 
 func (e *BasicEnemy) Speed() int {

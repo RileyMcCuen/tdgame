@@ -232,14 +232,18 @@ func (n Node) Remove(col Collider) {
 	}
 }
 
-func (n Node) Process(ticks int) {
+func (n Node) Process(ticks int, con core.Context) bool {
 	for _, dmger := range n.dmgers {
 		for _, dable := range n.dables {
 			if dmger.Near(dable) {
-
+				dmger.DoDamage(dable)
+				// if dable.IsDead() {
+				// 	con.Remove(core.EnemyLayer, dable)
+				// }
 			}
 		}
 	}
+	return false
 }
 
 func (n Node) Done() bool { return false }
@@ -341,12 +345,13 @@ func GraphFromPath(spec *GraphSpec, start core.Point, dirs []core.Direction, aa 
 	return CachedImageGraph{spec, eimgWithGrid, eimg, start, kinds, g}
 }
 
-func (g BasicGraph) Process(ticks int) {
+func (g BasicGraph) Process(ticks int, con core.Context) bool {
 	for _, row := range g {
 		for _, nd := range row {
-			nd.Process(ticks)
+			nd.Process(ticks, con)
 		}
 	}
+	return false
 }
 
 func (g BasicGraph) Done() bool { return false }

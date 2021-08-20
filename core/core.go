@@ -23,13 +23,6 @@ type (
 	LocationWrapper struct {
 		l *Location
 	}
-	Processor interface {
-		Process(tick int)
-		Done() bool
-	}
-	Drawer interface {
-		Draw(con *gg.Context)
-	}
 	Locator interface {
 		Location() Location
 		SetLocation(Location)

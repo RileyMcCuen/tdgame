@@ -36,9 +36,10 @@ func (s *SpriteEffect) Length() int {
 	return s.s.total * s.s.delay
 }
 
-func (s *SpriteEffect) Process(ticks int) {
-	s.s.Process(ticks)
+func (s *SpriteEffect) Process(ticks int, con core.Context) bool {
+	s.s.Process(ticks, con)
 	s.done = s.started && s.s.cur == 0 && s.s.t.Ticks() == 0
+	return false
 }
 
 func (s *SpriteEffect) Draw(con *gg.Context) {

@@ -60,17 +60,18 @@ func (a *StaticAsset) Copy() Asset {
 	return &StaticAsset{a.offset, a.Image}
 }
 
-func (s *StaticAsset) Process(ticks int) {}
+func (s *StaticAsset) Process(ticks int, con core.Context) bool { return false }
 
 func (s *StaticAsset) Done() bool { return false }
 
 func (a *StaticAsset) Reset() {}
 
-func (s *Sprite) Process(ticks int) {
+func (s *Sprite) Process(ticks int, con core.Context) bool {
 	if s.t.Tick() {
 		s.IncrementFrame()
 		s.t.Reset()
 	}
+	return false
 }
 
 func (s *Sprite) Done() bool {

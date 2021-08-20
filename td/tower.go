@@ -139,19 +139,18 @@ func TowerFromSpec(ts *TowerSpec, assets asset.AssetAtlas, anims animator.Animat
 	}
 }
 
-func (t *ShootingTower) Process(ticks int) {
-	if !t.Done() {
-		if t.enemyLoc != nil {
-			t.sprite.Process(ticks)
-			if t.t.Ticks() == t.sprite.Length()-1 {
-				t.enemyLoc = nil
-			}
-		}
-		t.t.Tick()
-	}
+func (t *ShootingTower) Process(ticks int, con core.Context) bool {
+	// if !t.Done() {
+	// 	if t.enemyLoc != nil {
+	// 		t.sprite.Process(ticks, con)
+	// 		if t.t.Ticks() == t.sprite.Length()-1 {
+	// 			t.enemyLoc = nil
+	// 		}
+	// 	}
+	// 	t.t.Tick()
+	// }
+	return false
 }
-
-func (t *ShootingTower) Done() bool { return false }
 
 func (t *ShootingTower) calculateTrajectory(e Enemy) Projectile {
 	// fmt.Println("\tstart")
